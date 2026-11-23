@@ -1,24 +1,20 @@
-// site-generator-speed-01 entry: the harness runs `node /bot/main.ts` (node22). It
-// reads every case from /input/cases.json (a JSON array of {id, input}), answers
-// each one alone with run() from solve.js, and writes /output/answers.json: a JSON
-// array of the answers, one per case and in the cases' order. Outside a container
-// MAKEFUN_INPUT_DIR and MAKEFUN_OUTPUT_DIR stand in for /input and /output.
-
-import { readFileSync, writeFileSync } from 'node:fs';
+// Driver for site-generator-speed-01-run-20261122: reads every case from
+// /input/cases.json, answers each with solve.js run(), writes
+// /output/answers.json. V8 flags are tuned before solve.js loads, the way
+// the house baseline tunes --no-incremental-marking: --no-opt wins most
+// (a single-run batch job pays more CPU for TurboFan compile threads than
+// optimized code saves), --single-threaded and --no-lazy cut the remaining
+// background-thread CPU. Pure JS, no WASM, no native code.
 import { setFlagsFromString } from 'node:v8';
+import { readFileSync, writeFileSync } from 'node:fs';
 
-// V8's incremental marking off, set before solve.js is imported so all of its
-// work runs under it (the house baseline runs with --no-incremental-marking, and
-// an entry may tune V8's flags the same way).
-setFlagsFromString('--no-incremental-marking');
+setFlagsFromString('--no-incremental-marking --no-opt --single-threaded --no-lazy');
 
-/** solve.js, imported by its URL (a .js module carries no types) and typed by its contract. */
-const { run } = (await import(new URL('./solve.js', import.meta.url).href)) as { run: (input: unknown) => unknown };
-
-const INPUT_DIR = process.env.MAKEFUN_INPUT_DIR ?? '/input';
-const OUTPUT_DIR = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
-
-const cases = JSON.parse(readFileSync(`${INPUT_DIR}/cases.json`, 'utf8')) as { id: string; input: unknown }[];
-const answers: unknown[] = [];
-for (const c of cases) answers.push(run(c.input));
-writeFileSync(`${OUTPUT_DIR}/answers.json`, JSON.stringify(answers));
+const { run } = await import('./solve.js');
+const inDir = process.env.MAKEFUN_INPUT_DIR ?? '/input';
+const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const cases = JSON.parse(readFileSync(inDir + '/cases.json', 'utf8'));
+const answers = [];
+for (let i = 0; i < cases.length; i++) answers.push(run(cases[i].input));
+const text = JSON.stringify(answers);
+writeFileSync(outDir + '/answers.json', text);
